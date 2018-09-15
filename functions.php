@@ -8,18 +8,19 @@
  *                                  Default is 2.
  * @param float   $scale_increment  Optional. The scale increment of the window
  *                                  size at each step. Default is 1.25.
- * @param float   $increment        The shift of the window at each sub-step, in
- *                                  terms of percentage of the window size.
+ * @param float   $increment        Optional. The shift of the window at each
+ *                                  sub-step, in terms of percentage of the
+ *                                  window size. Default is 0.1.
  * @param int     $min_neighbours   Optional. The minimum number of rectangles
  *                                  needed for the corresponding detection to be
- *                                  kept. Default is 1.
+ *                                  kept. Default is 2.
  * @param boolean $do_canny_pruning Optional. Whether to perform canny pruning.
  *                                  Default is TRUE.
  *
  * @return array|WP_Error Coordinates of faces found in the image or a 
  *                        WP_Error object in case of an error.
  */
-function face_detection_get_faces( $image_file, $base_scale = 2, $scale_increment = 1.25, $increment = 1, $min_neighbours = 1, $do_canny_pruning = true ) {
+function face_detection_get_faces( $image_file, $base_scale = 2, $scale_increment = 1.25, $increment = 0.1, $min_neighbours = 2, $do_canny_pruning = true ) {
 	$faces = array();
 
 	try {
@@ -91,7 +92,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 
 				$tree->features = array();
 
-				foreach ( $xml_tree->_->_ as $xml_feature ) {
+				foreach ( $xml_tree->_->feature as $xml_feature ) {
 					$feature = new StdClass();
 
 					$feature->rectangles = array();
@@ -101,12 +102,12 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 					$feature->left_node  = absint( $xml_tree->_->left_node );
 					$feature->right_node = absint( $xml_tree->_->right_node );
 
-					foreach ( $tree->_->feature->rects as $xml_rect ) {
+					foreach ( $xml_feature->rects->_ as $xml_rect ) {
 						$rectangle = new StdClass();
 
 						$values = explode( ' ', strval( $xml_rect ) );
 
-						list( $rectangle->x1, $rectangle->y1, $rectangle->x2, $rectangle->y2 ) = array_map( 'absint', $values );
+						list( $rectangle->x1, $rectangle->x2, $rectangle->y1, $rectangle->y2 ) = array_map( 'absint', $values );
 
 						$rectangle->weight = floatval( $values[4] );
 
@@ -116,7 +117,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 					$tree->features[] = $feature;
 				}
 
-				$stage->tree[] = $tree;
+				$stage->trees[] = $tree;
 			}
 
 			$stages[] = $stage;
@@ -244,96 +245,20 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 		$max_scale   = min( $image_width / $classifier_width, $image_height / $classifier_height );
 
 		for ( $scale = $base_scale; $scale < $max_scale; $scale *= $scale_increment ) {
-			$size = $scale * $classifier_width;
-			$step = $size * $increment;
+			$size = intval( $scale * $classifier_width );
+			$step = intval( $size * $increment );
 
 			for ( $x = 0; $x < $image_width - $size; $x += $step ) {
 				for ( $y = 0; $y < $image_height - $size; $y += $step ) {
-					if ( $image_canny ) {
-						$edges_density = $image_canny[ $x + $size ][ $y + $size ] + $image_canny[ $x ][ $y ] - $image_canny[ $x ][ $y + $size ] - $image_canny[ $x + $size ][ $y ];
+					$scanner = new Face_Detection_Scanner( $x, $y, $size, $stages, $image_canny, $image_gray, $image_squared );
 
-						$d = $edges_density / $size / $size;
-
-						if ( $d < 20 || $d > 100 ) {
-							continue;
-						}
+					while ( $scanner->isRunning() ) {
+						usleep( 100 );
 					}
 
-					$pass = true;
+					$rectangle = $scanner->getRectangle();
 
-					foreach ( $stages as $stage ) {
-						$value = null;
-
-						foreach ( $stage->trees as $tree ) {
-							$node  = $tree->features[0];
-
-							while ( null === $value ) {
-								$feature_width  = $scale * $classifier_width;
-								$feature_height = $scale * $classifier_height;
-								$inverse_area   = 1 / ( $feature_width * $feature_height );
-
-								$total_x         =
-									$image_gray[ $x + $feature_width ][ $y + $feature_height ] +
-									$image_gray[ $x ][ $y ] -
-									$image_gray[ $x ][ $y - $feature_height ] -
-									$image_gray[ $x + $feature_width ][ $y ];
-								$total_x_squared =
-									$image_squared[ $x + $feature_width ][ $y + $feature_height ] +
-									$image_squared[ $x ][ $y ] -
-									$image_squared[ $x ][ $y - $feature_height ] -
-									$image_squared[ $x + $feature_width ][ $y ];
-
-								$moy   = $total_x * $invesor_area;
-								$vnorm = ( $total_x_squared * $inversor_area ) - ( $moy * $moy );
-								$vnorm = $vnorm > 1 ? sqrt( $vnorm ) : 1;
-
-								$rectangle_sum   = 0;
-								$rectangle_count = count( $feature->rectangles );
-
-								for ( $i = 0; $i < $rectangle_count; $i++ ) {
-									$rectangle = $feature->rectangles[ $i ];
-
-									$rectangle_sum += (
-										$image_gray[ $x + ( $scale * $rectangle->x2 ) ][ $x + ( $scale * ( $rectangle->x2 + $rectangle->y2 ) ) ] -
-										$image_gray[ $x + ( $scale * $rectangle->x1 ) ][ $x + ( $scale * ( $rectangle->x2 + $rectangle->y2 ) ) ] -
-										$image_gray[ $x + ( $scale * $rectangle->x2 ) ][ $x + ( $scale * ( $rectangle->x1 + $rectangle->y1 ) ) ] +
-										$image_gray[ $x + ( $scale * $rectangle->x1 ) ][ $x + ( $scale * ( $rectangle->x1 + $rectangle->y1 ) ) ]
-									) * $rectangle->weight;
-								}
-
-								$left = $rectangle_sum * $inversor_area < $feature->threshold * $vnorm;
-
-								if ( $left ) {
-									if ( $node->left_val ) {
-										$value = $node->left_val;
-									} else {
-										$node = $tree->features[ $node->left_node ];
-									}
-								} else {
-									if ( $node->right_val ) {
-										$value = $node->right_val;
-									} else {
-										$node = $tree->features[ $node->right_node ];
-									}
-								}
-							}
-						}
-
-						if ( $value <= $stage->threshold ) {
-							$pass = false;
-
-							break;
-						}
-					}
-
-					if ( $pass ) {
-						$rectangle = new StdClass();
-
-						$rectangle->x      = $x;
-						$rectangle->y      = $y;
-						$rectangle->width  = $size;
-						$rectangle->height = $size;
-
+					if ( $rectangle ) {
 						$rectangles[] = $rectangle;
 					}
 				}
@@ -344,55 +269,50 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 		 * Merge the raw detections resulting from the detection step in order
 		 * to avoid multiple detections of the same object.
 		 */
-		$ret        = array();
-		$nb_classes = 0;
-		$neighbours = array();
+		$rectangle_equals = array();
+		$neighbour_types  = 0;
+		$neighbours       = array();
+		$rectangle_count  = count( $rectangles );
 
-		for ( $i = 0; $i < count( $rectangles ); $i++ ) {
+		for ( $i = 0; $i < $rectangle_count; $i++ ) {
 			$found = false;
 
-			$rectangle_1 = $rectangles[ $i ];
+			$rectangle_i = $rectangles[ $i ];
 
 			for ( $j = 0; $j < $i; $j++ ) {
-				$rectangle_2 = $rectangles[ $j ];
-				$equal       = false;
-
-				$distance = $rectangle_1->width * 0.2;
+				$rectangle_j = $rectangles[ $j ];
+				$distance    = intval( $rectangle_j->width * 0.2 );
 
 				if (
-					$rectangle_2->x <= $rectangle_1->x + $distance &&
-					$rectangle_2->x >= $rectangle_1->x - $distance &&
-					$rectangle_2->y <= $rectangle_1->y + $distance &&
-					$rectangle_2->y >= $rectangle_1->y - $distance &&
-					$rectangle_2->width <= $rectangle_1->width * 1.2 &&
-					$rectangle_2->width * 1.2 >= $rectangle_1->width
+					(
+						$rectangle_i->x <= $rectangle_j->x + $distance &&
+						$rectangle_i->x >= $rectangle_j->x - $distance &&
+						$rectangle_i->y <= $rectangle_j->y + $distance &&
+						$rectangle_i->y >= $rectangle_j->y - $distance &&
+						$rectangle_i->width <= intval( $rectangle_j->width * 1.2 ) &&
+						intval( $rectangle_i->width * 1.2 ) >= $rectangle_j->width
+					) || (
+						$rectangle_j->x >= $rectangle_i->x &&
+						$rectangle_j->x + $rectangle_j->width <= $rectangle_i->x + $rectangle_i->width &&
+						$rectangle_j->y >= $rectangle_i->y &&
+						$rectangle_j->y + $rectangle_j->height <= $rectangle_i->y + $rectangle_i->height
+					)
 				) {
-					$equal = true;
-				} elseif (
-					$rectangle_1->x >= $rectangle_2->x &&
-					$rectangle_1->x + $rectangle_1->width <= $rectangle_2->x + $rectangle_2->width &&
-					$rectangle_1->y >= $rectangle_2->y &&
-					$rectangle_1->x + $rectangle_1->height <= $rectangle_2->y + $rectangle_2->height
-				) {
-					$equal = true;
-				}
-
-				if ( $equal ) {
-					$found     = true;
-					$ret[ $i ] = $ret[ $j ];
+					$found                  = true;
+					$rectangle_equals[ $i ] = $rectangle_equals[ $j ];
 				}
 			}
 
 			if ( ! $found ) {
-				$ret[ $i ] = $nb_classes;
+				$rectangle_equals[ $i ] = $neighbour_types;
 
-				$nb_classes++;
+				$neighbour_types++;
 			}
 		}
 
 		$aux_rectangles = array();
 
-		for ( $i = 0; $i < $nb_classes; $i++ ) {
+		for ( $i = 0; $i < $neighbour_types; $i++ ) {
 			$rectangle = new StdClass();
 
 			$rectangle->x      = 0;
@@ -407,7 +327,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 		$rectangles_count = count( $rectangles );
 
 		for ( $i = 0; $i < $rectangles_count; $i++ ) {
-			$j = $ret[ $i ];
+			$j = $rectangle_equals[ $i ];
 
 			$neighbours[ $j ]++;
 			$aux_rectangles[ $j ]->x      += $rectangles[ $i ]->x;
@@ -416,7 +336,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 			$aux_rectangles[ $j ]->height += $rectangles[ $i ]->height;
 		}
 
-		for ( $i = 0; $i < $nb_classes; $i++ ) {
+		for ( $i = 0; $i < $neighbour_types; $i++ ) {
 			$j = $neighbours[ $i ];
 
 			if ( $j >= $min_neighbours ) {
