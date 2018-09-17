@@ -53,8 +53,39 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 			throw new Exception( __( 'Unknown image format', 'face-detection' ) );
 		}
 
-		$image_width  = $image_size[0];
-		$image_height = $image_size[1];
+		$image_width      = $image_size[0];
+		$image_height     = $image_size[1];
+		$image_size_limit = apply_filters( 'face_detection_image_size_limit', 1000 );
+
+		$max_dimension = max( $image_width, $image_height );
+
+		if ( $max_dimension > $image_size_limit ) {
+			$compressed_ratio = $image_size_limit / $max_dimension;
+		} else {
+			$compressed_ratio = 1;
+		}
+
+		if ( 1 !== $compressed_ratio ) {
+			$image_compressed_width  = $compressed_ratio * $image_width;
+			$image_compressed_height = $compressed_ratio * $image_height;
+
+			$image_compressed = imagecreatetruecolor( $image_compressed_width, $image_compressed_height );
+
+			if ( ! $image_compressed ) {
+				throw new Exception( __( 'Cannot create compressed image', 'face-detection' ) );
+			}
+
+			if ( ! imagecopyresampled( $image_compressed, $image, 0, 0, 0, 0, $image_compressed_width, $image_compressed_height, $image_width, $image_height ) ) {
+				throw new Exception( __( 'Cannot compress image', 'face-detection' ) );
+			}
+
+			$image_width  = intval( $image_compressed_width );
+			$image_height = intval( $image_compressed_height );
+
+			imagedestroy( $image );
+
+			$image = $image_compressed;
+		}
 
 		$haarcascade_file = apply_filters( 'face_detection_haarcascade_file', __DIR__ . '/assets/haarcascade-frontalface.xml' );
 
@@ -92,17 +123,17 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 
 				$tree->features = array();
 
-				foreach ( $xml_tree->_->feature as $xml_feature ) {
+				foreach ( $xml_tree->_ as $xml_node ) {
 					$feature = new StdClass();
 
 					$feature->rectangles = array();
-					$feature->threshold  = floatval( $xml_tree->_->threshold );
-					$feature->left_val   = floatval( $xml_tree->_->left_val );
-					$feature->right_val  = floatval( $xml_tree->_->right_val );
-					$feature->left_node  = absint( $xml_tree->_->left_node );
-					$feature->right_node = absint( $xml_tree->_->right_node );
+					$feature->threshold  = floatval( $xml_node->threshold );
+					$feature->left_val   = floatval( $xml_node->left_val );
+					$feature->right_val  = floatval( $xml_node->right_val );
+					$feature->left_node  = absint( $xml_node->left_node );
+					$feature->right_node = absint( $xml_node->right_node );
 
-					foreach ( $xml_feature->rects->_ as $xml_rect ) {
+					foreach ( $xml_node->feature->rects->_ as $xml_rect ) {
 						$rectangle = new StdClass();
 
 						$values = explode( ' ', strval( $xml_rect ) );
@@ -250,15 +281,105 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 
 			for ( $x = 0; $x < $image_width - $size; $x += $step ) {
 				for ( $y = 0; $y < $image_height - $size; $y += $step ) {
-					$scanner = new Face_Detection_Scanner( $x, $y, $size, $stages, $image_canny, $image_gray, $image_squared );
+					$pass = true;
 
-					while ( $scanner->isRunning() ) {
-						usleep( 100 );
+					if ( $image_canny ) {
+						$edges_density = $image_canny[ $x + $size ][ $y + $size ] + $image_canny[ $x ][ $y ] - $image_canny[ $x ][ $y + $size ] - $image_canny[ $x + $size ][ $y ];
+
+						$density = $edges_density / $size / $size;
+
+						if ( $density < 20 || $density > 100 ) {
+							$pass = false;
+						}
 					}
 
-					$rectangle = $scanner->getRectangle();
+					if ( $pass ) {
+						foreach ( $stages as $stage ) {
+							$value = 0;
 
-					if ( $rectangle ) {
+							foreach ( $stage->trees as $tree ) {
+								$feature    = $tree->features[0];
+								$tree_value = null;
+
+								while ( null === $tree_value ) {
+									$feature_width  = intval( $scale * $classifier_width );
+									$feature_height = intval( $scale * $classifier_height );
+									$inverse_area   = 1 / ( $feature_width * $feature_height );
+
+									$total_x         =
+										$image_gray[ $x + $feature_width ][ $y + $feature_height ] +
+										$image_gray[ $x ][ $y ] -
+										$image_gray[ $x ][ $y + $feature_height ] -
+										$image_gray[ $x + $feature_width ][ $y ];
+									$total_x_squared =
+										$image_squared[ $x + $feature_width ][ $y + $feature_height ] +
+										$image_squared[ $x ][ $y ] -
+										$image_squared[ $x ][ $y + $feature_height ] -
+										$image_squared[ $x + $feature_width ][ $y ];
+
+									$moy   = $total_x * $inverse_area;
+									$vnorm = ( $total_x_squared * $inverse_area ) - ( $moy * $moy );
+									$vnorm = $vnorm > 1 ? sqrt( $vnorm ) : 1;
+
+									$rectangle_sum   = 0;
+									$rectangle_count = count( $feature->rectangles );
+
+									for ( $i = 0; $i < $rectangle_count; $i++ ) {
+										$rectangle = $feature->rectangles[ $i ];
+
+										$x1 = $x + intval( $scale * $rectangle->x1 );
+										$x2 = $x + intval( $scale * ( $rectangle->x1 + $rectangle->y1 ) );
+										$y1 = $y + intval( $scale * $rectangle->x2 );
+										$y2 = $y + intval( $scale * ( $rectangle->x2 + $rectangle->y2 ) );
+
+										$rectangle_sum += intval( (
+											$image_gray[ $x2 ][ $y2 ] -
+											$image_gray[ $x1 ][ $y2 ] -
+											$image_gray[ $x2 ][ $y1 ] +
+											$image_gray[ $x1 ][ $y1 ]
+										) * $rectangle->weight );
+									}
+
+									$left = $rectangle_sum * $inverse_area < $feature->threshold * $vnorm;
+
+									if ( $left ) {
+										if ( $feature->left_val ) {
+											$tree_value = $feature->left_val;
+										} elseif ( $feature->left_node && isset( $tree->features[ $feature->left_node ] ) ) {
+											$feature = $tree->features[ $feature->left_node ];
+										} else {
+											throw new Exception( __( 'Missing tree node', 'face-detection' ) );
+										}
+									} else {
+										if ( $feature->right_val ) {
+											$tree_value = $feature->right_val;
+										} elseif ( $feature->right_node && isset( $tree->features[ $feature->right_node ] ) ) {
+											$feature = $tree->features[ $feature->right_node ];
+										} else {
+											throw new Exception( __( 'Missing tree node', 'face-detection' ) );
+										}
+									}
+								}
+
+								$value += $tree_value;
+							}
+
+							if ( $value <= $stage->threshold ) {
+								$pass = false;
+
+								break;
+							}
+						}
+					}
+
+					if ( $pass ) {
+						$rectangle = new StdClass();
+
+						$rectangle->x      = $x;
+						$rectangle->y      = $y;
+						$rectangle->width  = $size;
+						$rectangle->height = $size;
+
 						$rectangles[] = $rectangle;
 					}
 				}
@@ -342,10 +463,10 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 			if ( $j >= $min_neighbours ) {
 				$face = new StdClass();
 
-				$face->x      = ( $aux_rectangles[ $i ]->x * 2 + $j ) / ( 2 * $j );
-				$face->y      = ( $aux_rectangles[ $i ]->y * 2 + $j ) / ( 2 * $j );
-				$face->width  = ( $aux_rectangles[ $i ]->width * 2 + $j ) / ( 2 * $j );
-				$face->height = ( $aux_rectangles[ $i ]->height * 2 + $j ) / ( 2 * $j );
+				$face->x      = intval( ( $aux_rectangles[ $i ]->x * 2 + $j ) / ( 2 * $j ) / $compressed_ratio );
+				$face->y      = intval( ( $aux_rectangles[ $i ]->y * 2 + $j ) / ( 2 * $j ) / $compressed_ratio );
+				$face->width  = intval( ( $aux_rectangles[ $i ]->width * 2 + $j ) / ( 2 * $j ) / $compressed_ratio );
+				$face->height = intval( ( $aux_rectangles[ $i ]->height * 2 + $j ) / ( 2 * $j ) / $compressed_ratio );
 
 				$faces[] = $face;
 			}

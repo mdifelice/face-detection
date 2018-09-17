@@ -1,15 +1,21 @@
 <?php
-include 'functions.php';
-include 'class-face-detection-scanner.php';
+require_once __DIR__ . '/functions.php';
 
+// @todo
+//
+/*
+class WP_Error { function __construct( $c, $m ) { $this->c = $c; $this->m = $m; } }
+function __( $t, $d ) { return $t; }
 function apply_filters( $f, $v ) { return $v; }
 function absint( $i ) { return abs( intval( $i ) ); }
 
-$source = '/media/sf_Downloads/20180522_094613.jpg';
+$source = '/media/sf_Downloads/s3-news-tmp-85019-oscar--2x1--940.jpg';
 
 $faces = face_detection_get_faces( $source );
 
-if ( empty( $faces ) ) {
+if ( is_a( $faces, 'WP_Error') ) {
+	echo $faces->m . PHP_EOL;
+} elseif ( empty( $faces ) ) {
 	echo "No faces found, doing nothing\n";
 } else {
 	$image = imagecreatefromjpeg( $source );
@@ -26,3 +32,4 @@ if ( empty( $faces ) ) {
 
 	echo "Saved image $output\n";
 }
+ */
