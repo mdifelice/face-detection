@@ -54,7 +54,8 @@ add_action( 'add_meta_boxes', function() {
 
 			if ( current_user_can( 'upload_files' ) ) {
 			?>
-<a class="button-primary" id="face-detection-regenerate" href="#"><?php esc_html_e( 'Regenerate thumbnails', 'face-detection' ); ?></a>
+<a class="button-primary face-detection-button" id="face-detection-regenerate" href="#"><?php esc_html_e( 'Regenerate thumbnails', 'face-detection' ); ?></a>
+<a class="button-secondary face-detection-button" id="face-detection-reset" href="#"><?php esc_html_e( 'Reset thumbnails', 'face-detection' ); ?></a>
 			<?php
 			}
 		},
@@ -88,7 +89,6 @@ add_action( 'admin_enqueue_scripts', function( $hook ) {
 					'error'                   => __( 'There has been an error. Please, try again.', 'face-detection' ),
 					'loading_thumbnails'      => __( 'Loading thumbnails...', 'face-detection' ),
 					'no_thumbnails'           => __( 'There are not any cropped thumbnails.', 'face-detection' ),
-					'regenerate_thumbnails'   => __( 'Regenerate thumbnails', 'face-detection' ),
 					'regenerating_thumbnails' => __( 'Regenerating thumbnails...', 'face-detection' ),
 				),
 				'nonces'          => array(
@@ -122,16 +122,27 @@ add_action( 'wp_ajax_face_detection_regenerate_thumbnails', function() {
 
 	if ( isset( $_POST['attachment_id'] ) ) {
 		$attachment_id = intval( $_POST['attachment_id'] );
+		$ignore_faces  = false;
+
+		if ( isset( $_POST['ignore_faces'] ) ) {
+			$ignore_faces = 'yes' === sanitize_text_field( wp_unslash( $_POST['ignore_faces'] ) );
+		}
 
 		if ( current_user_can( 'upload_files' ) ) {
-			add_filter( 'face_detection_upload_enabled', '__return_true' );
+			if ( $ignore_faces ) {
+				$filter_callback = '__return_false';
+			} else {
+				$filter_callback = '__return_true';
+			}
+
+			add_filter( 'face_detection_upload_enabled', $filter_callback );
 
 			$file     = get_attached_file( $attachment_id );
 			$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
 
 			wp_update_attachment_metadata( $attachment_id, $metadata );
 
-			remove_filter( 'face_detection_upload_enabled', '__return_true' );
+			remove_filter( 'face_detection_upload_enabled', $filter_callback );
 		}
 
 		$thumbnails = face_detection_get_cropped_thumbnails( $attachment_id );
@@ -150,9 +161,18 @@ add_filter( 'intermediate_image_sizes_advanced', function( $sizes, $metadata ) {
 	if ( $upload_enabled ) {
 		$upload_dir = _wp_upload_dir();
 		$image_file = $upload_dir['basedir'] . '/' . $metadata['file'];
-		$faces      = face_detection_get_faces( $image_file );
+		$cache_key  = 'face_detection_' . md5( $image_file );
+		$faces      = wp_cache_get( $cache_key );
 
-		if ( ! empty( $faces ) && ! is_wp_error( $faces ) ) {
+		if ( false === $faces ) {
+			$faces = face_detection_get_faces( $image_file );
+
+			if ( ! empty( $faces ) && ! is_wp_error( $faces ) ) {
+				$face_detection_faces = $faces;
+
+				wp_cache_set( $cache_key, $faces );
+			}
+		} else {
 			$face_detection_faces = $faces;
 		}
 	}

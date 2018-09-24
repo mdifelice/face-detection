@@ -40,10 +40,11 @@ jQuery( document ).ready( function() {
 		}
 	};
 
-	var loadThumbnails = function( regenerate ) {
-		var regenerate = regenerate || false;
-		var action     = 'face_detection_' + ( regenerate ? 'regenerate' : 'load' ) + '_thumbnails';
-		var nonce      = ( regenerate ? 'regenerate' : 'load' ) + '_thumbnails';
+	var loadThumbnails = function( regenerate, ignoreFaces ) {
+		var regenerate  = regenerate || false;
+		var ignoreFaces = ignoreFaces || false;
+		var action      = 'face_detection_' + ( regenerate ? 'regenerate' : 'load' ) + '_thumbnails';
+		var nonce       = ( regenerate ? 'regenerate' : 'load' ) + '_thumbnails';
 
 		jQuery( '#face-detection-thumbnails' )
 			.empty()
@@ -52,11 +53,11 @@ jQuery( document ).ready( function() {
 				.text( regenerate ? face_detection.i18n.regenerating_thumbnails : face_detection.i18n.loading_thumbnails )
 			);
 
-		jQuery( '#face-detection-regenerate' ).attr( 'disabled', 'disabled' );
+		jQuery( '.face-detection-button' ).attr( 'disabled', 'disabled' );
 
 		jQuery.ajax( {
 			complete : function() {
-				jQuery( '#face-detection-regenerate' ).removeAttr( 'disabled' );
+				jQuery( '.face-detection-button' ).removeAttr( 'disabled' );
 			},
 			error    : function() {
 				jQuery( '#face-detection-thumbnails' )
@@ -70,6 +71,7 @@ jQuery( document ).ready( function() {
 				action        : action,
 				_wpnonce      : face_detection.nonces[ nonce ],
 				attachment_id : face_detection.attachment_id,
+				ignore_faces  : ignoreFaces ? 'yes' : 'no',
 			},
 			method   : 'POST',
 			success  : function( response ) {
@@ -114,9 +116,15 @@ jQuery( document ).ready( function() {
 		window.addEventListener( 'resize', wrapFaces );
 
 		jQuery( '#face-detection-regenerate' ).click( function( e ) {
-			loadThumbnails( true );
-
 			e.preventDefault();
+
+			loadThumbnails( true );
+		} );
+
+		jQuery( '#face-detection-reset' ).click( function( e ) {
+			e.preventDefault();
+
+			loadThumbnails( true, true );
 		} );
 	}
 } );
