@@ -1,0 +1,50 @@
+.wp_attachment_image p {
+	position: relative;
+}
+
+.face-detection-face {
+	border: 1px solid #ffff00;
+	box-sizing: border-box;
+	position: absolute;
+}
+
+.face-detection-face.face-detection-face-biggest {
+	border-width: 2px;
+}
+
+#face-detection-thumbnails {
+	overflow: auto;
+}
+
+.face-detection-thumbnail {
+	position: relative;
+	float: left;
+}
+
+.face-detection-thumbnail img {
+	display: block;
+	height: auto;
+	margin: 0.5em;
+	max-width: 100%;
+}
+
+.face-detection-thumbnail span {
+	background: rgba( 0, 0, 0, 0.5 );
+	bottom: 0.5em;
+	box-sizing: border-box;
+	color: #fff;
+	display: none;
+	left: 0.5em;
+	padding: 0.1em 0.5em;
+	position: absolute;
+	text-align: center;
+	width: calc( 100% - 1em );
+}
+
+.face-detection-thumbnail:hover span {
+	display: block;
+}
+
+#face-detection .button-primary {
+	clear: both;
+}

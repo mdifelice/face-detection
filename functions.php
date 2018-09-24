@@ -104,7 +104,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 		 */
 		$stages = array();
 
-		list( $classifier_width, $classifier_height ) = array_map( 'absint', explode( ' ', $xml_root->size ) );
+		list( $classifier_width, $classifier_height ) = array_map( 'absint', explode( ' ', trim( $xml_root->size ) ) );
 
 		if ( ! $classifier_width || ! $classifier_height ) {
 			throw new Exception( __( 'Invalid classifier size', 'face-detection' ) );
@@ -477,3 +477,58 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 
 	return $faces;
 }
+
+function face_detection_get_cropped_thumbnails( $attachment_id ) {
+	global $_wp_additional_image_sizes;
+
+	$thumbnails      = array();
+	$cropped_sizes   = array();
+	$sizes           = get_intermediate_image_sizes();
+	$metadata        = get_post_meta( $attachment_id, '_wp_attachment_metadata', true );
+	$original_width  = 0;
+	$original_height = 0;
+
+	if ( isset( $metadata['width'] ) ) {
+		$original_width = $metadata['width'];
+	}
+
+	if ( isset( $metadata['height'] ) ) {
+		$original_height = $metadata['height'];
+	}
+
+	foreach ( $sizes as $size ) {
+		$is_cropped = false;
+		$width      = 0;
+		$height     = 0;
+
+		if ( in_array( $size, array(
+			'thumbnail',
+			'medium',
+			'medium_large',
+			'large',
+		) ) ) {
+			$width      = get_option( $size . '_size_w' );
+			$height     = get_option( $size . '_size_h' );
+			$is_cropped = ! ! get_option( $size . '_crop' );
+		} elseif ( isset( $_wp_additional_image_sizes[ $size ] ) ) {
+			$width      = $_wp_additional_image_sizes[ $size ]['width'];
+			$height     = $_wp_additional_image_sizes[ $size ]['height'];
+			$is_cropped = ! ! $_wp_additional_image_sizes[ $size ]['crop'];
+		}
+
+		if ( $is_cropped && ( $width < $original_width || $height < $original_height ) ) {
+			$cropped_sizes[] = $size;
+		}
+	}
+
+	foreach ( $cropped_sizes as $size ) {
+		$image_src = wp_get_attachment_image_src( $attachment_id, $size );
+
+		if ( $image_src ) {
+			$thumbnails[ $size ] = $image_src[0];
+		}
+	}
+
+	return $thumbnails;
+}
+
