@@ -1,5 +1,11 @@
 <?php
 /**
+ * Generic functions.
+ *
+ * @package Face_Detection
+ */
+
+/**
  * Returns an array of coordinates of faces found in an image.
  *
  * @param string  $image_file       Image file.
@@ -17,7 +23,7 @@
  * @param boolean $do_canny_pruning Optional. Whether to perform canny pruning.
  *                                  Default is TRUE.
  *
- * @return array|WP_Error Coordinates of faces found in the image or a 
+ * @return array|WP_Error Coordinates of faces found in the image or a
  *                        WP_Error object in case of an error.
  */
 function face_detection_get_faces( $image_file, $base_scale = 2, $scale_increment = 1.25, $increment = 0.1, $min_neighbours = 2, $do_canny_pruning = true ) {
@@ -92,7 +98,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 		$xml = simplexml_load_file( $haarcascade_file );
 
 		if ( ! $xml ) {
-			throw new Exception( __( 'Cannot load Haar file', 'face-detection' ) ); 
+			throw new Exception( __( 'Cannot load Haar file', 'face-detection' ) );
 		}
 
 		$xml_root = $xml->children()[0];
@@ -238,7 +244,7 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 
 					if ( $x >= 1 && $x < $image_width - 1 && $y >= 1 && $y < $image_height - 1 ) {
 						$value =
-							abs( 
+							abs(
 								-$image_canny[ $x - 1 ][ $y - 1 ] +
 								$image_canny[ $x + 1 ][ $y - 1 ] -
 								( 2 * $image_canny[ $x - 1 ][ $y ] ) +
@@ -272,8 +278,8 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 			}
 		}
 
-		$rectangles  = array();
-		$max_scale   = min( $image_width / $classifier_width, $image_height / $classifier_height );
+		$rectangles = array();
+		$max_scale  = min( $image_width / $classifier_width, $image_height / $classifier_height );
 
 		for ( $scale = $base_scale; $scale < $max_scale; $scale *= $scale_increment ) {
 			$size = intval( $scale * $classifier_width );
@@ -332,12 +338,14 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 										$y1 = $y + intval( $scale * $rectangle->x2 );
 										$y2 = $y + intval( $scale * ( $rectangle->x2 + $rectangle->y2 ) );
 
-										$rectangle_sum += intval( (
+										$rectangle_sum += intval(
+											(
 											$image_gray[ $x2 ][ $y2 ] -
 											$image_gray[ $x1 ][ $y2 ] -
 											$image_gray[ $x2 ][ $y1 ] +
 											$image_gray[ $x1 ][ $y1 ]
-										) * $rectangle->weight );
+											) * $rectangle->weight
+										);
 									}
 
 									$left = $rectangle_sum * $inverse_area < $feature->threshold * $vnorm;
@@ -478,6 +486,13 @@ function face_detection_get_faces( $image_file, $base_scale = 2, $scale_incremen
 	return $faces;
 }
 
+/**
+ * Returns a list of cropped thumbnails for a media image item.
+ *
+ * @param int $attachment_id ID of the parent image.
+ *
+ * @return array List of attachments.
+ */
 function face_detection_get_cropped_thumbnails( $attachment_id ) {
 	global $_wp_additional_image_sizes;
 
@@ -501,12 +516,16 @@ function face_detection_get_cropped_thumbnails( $attachment_id ) {
 		$width      = 0;
 		$height     = 0;
 
-		if ( in_array( $size, array(
-			'thumbnail',
-			'medium',
-			'medium_large',
-			'large',
-		) ) ) {
+		if ( in_array(
+			$size,
+			array(
+				'thumbnail',
+				'medium',
+				'medium_large',
+				'large',
+			),
+			true
+		) ) {
 			$width      = get_option( $size . '_size_w' );
 			$height     = get_option( $size . '_size_h' );
 			$is_cropped = ! ! get_option( $size . '_crop' );
@@ -531,4 +550,3 @@ function face_detection_get_cropped_thumbnails( $attachment_id ) {
 
 	return $thumbnails;
 }
-
