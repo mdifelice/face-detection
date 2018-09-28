@@ -1,0 +1,64 @@
+# Domain: face-detection, Language: es
+# /trunk/face-detection.php:45, /trunk/face-detection.php:79
+msgid "Face Detection"
+msgstr "Detección de rostro"
+
+# /trunk/face-detection.php:52
+msgid "Enable Face Detection in media upload?"
+msgstr "¿Habilitar la detección de rostros en la carga de medios?"
+
+# /trunk/face-detection.php:57
+msgid "If you enable this option, whenever a new image is uploaded the plugin will attempt to detect faces on it. If you leave it disabled, you still have the possibility to detect faces in images by going to the Media Library."
+msgstr "Si habilita esta opción, cada vez que se cargue una nueva imagen, el complemento intentará detectar caras en ella. "
+
+# /trunk/face-detection.php:87
+msgid "Regenerate thumbnails"
+msgstr "Regenerar miniaturas"
+
+# /trunk/face-detection.php:88
+msgid "Reset thumbnails"
+msgstr "Restablecer miniaturas"
+
+# /trunk/face-detection.php:122
+msgid "There has been an error. Please, try again."
+msgstr "Ha habido un error. "
+
+# /trunk/face-detection.php:123
+msgid "Loading thumbnails..."
+msgstr "Cargando miniaturas..."
+
+# /trunk/face-detection.php:124
+msgid "There are not any cropped thumbnails."
+msgstr "No hay miniaturas recortadas."
+
+# /trunk/face-detection.php:125
+msgid "Regenerating thumbnails..."
+msgstr "Regenerando miniaturas..."
+
+# /trunk/functions.php:36
+msgid "Invalid image"
+msgstr "Imagen inválida"
+
+# /trunk/functions.php:59
+msgid "Unknown image format"
+msgstr "Formato de imagen desconocido"
+
+# /trunk/functions.php:81
+msgid "Cannot create compressed image"
+msgstr "No se puede crear una imagen comprimida"
+
+# /trunk/functions.php:85
+msgid "Cannot compress image"
+msgstr "No se puede comprimir la imagen"
+
+# /trunk/functions.php:101
+msgid "Cannot load Haar file"
+msgstr "No se puede cargar el archivo Haar"
+
+# /trunk/functions.php:116
+msgid "Invalid classifier size"
+msgstr "Tamaño de clasificador inválido"
+
+# /trunk/functions.php:359, /trunk/functions.php:367
+msgid "Missing tree node"
+msgstr "Nodo de árbol faltante"

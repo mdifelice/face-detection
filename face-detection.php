@@ -33,7 +33,7 @@ require_once __DIR__ . '/functions.php';
 add_action(
 	'init',
 	function() {
-		load_theme_textdomain( 'face-detection', __DIR__ . '/languages' );
+		load_plugin_textdomain( 'face-detection', false, 'face-detection/languages' );
 	}
 );
 
