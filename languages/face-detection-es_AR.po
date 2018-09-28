@@ -1,4 +1,8 @@
 # Domain: face-detection, Language: es
+# /trunk/face-detection.php:4
+msgid "Detects faces on uploaded images thus cropped generated thumbnails will not have cut heads."
+msgstr "Detecta rostros en imágenes cargadas, por lo que las miniaturas generadas recortadas no tendrán cabezas cortadas."
+
 # /trunk/face-detection.php:45, /trunk/face-detection.php:79
 msgid "Face Detection"
 msgstr "Detección de rostro"

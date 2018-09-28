@@ -1,8 +1,7 @@
 <?php
 /**
  * Plugin Name: Face Detection
- * Description: Detects faces on uploaded images thus cropped generated
- *              thumbnails will not have cut heads.
+ * Description: Detects faces on uploaded images thus cropped generated thumbnails will not have cut heads.
  * Plugin URI:  https://github.com/mdifelice/face-detection
  * Author:      Martin Di Felice
  * Author URI:  https://github.com/mdifelice
